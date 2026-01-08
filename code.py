@@ -1,70 +1,62 @@
 # -*- coding: utf-8 -*-
 """
-Implmentation de l'intgration numrique par la mthode de Monte Carlo
+Implémentation de l'intégration numérique par la méthode de Monte Carlo
 pour des fonctions polynomiales.
 """
 
 import random
 import numpy as np
-from typing import List
+from typing import List, Tuple
 
-# --- Fonctions auxiliaires ---
+# --- Fonctions de l'algorithme ---
 
 def evaluate_polynomial(coefficients: List[float], x: float) -> float:
     """
-    Calcule la valeur du polynme P(x) pour une valeur x donne.
+    Calcule la valeur du polynôme P(x) pour une valeur x donnée.
 
     Args:
-        coefficients: Liste des coefficients du polynme, de a_0   a_n.
-        x: Point dvaluation.
+        coefficients: Liste des coefficients du polynôme, de a_0 à a_n.
+        x: Point d’évaluation.
 
     Returns:
         La valeur P(x).
     """
-    # np.polyval attend les coefficients du plus haut degr au plus bas,
-    # il faut donc inverser la liste.
+    # np.polyval attend les coefficients du plus haut degré au plus bas.
     return np.polyval(coefficients[::-1], x)
 
 def calculate_derivative_coeffs(coefficients: List[float]) -> List[float]:
     """
-    Calcule les coefficients du polynme driv P'(x).
+    Calcule les coefficients du polynôme dérivé P'(x).
 
     Args:
-        coefficients: Liste des coefficients de P(x), de a_0   a_n.
+        coefficients: Liste des coefficients de P(x), de a_0 à a_n.
 
     Returns:
-        Liste des coefficients de P'(x), de a'_0   a'_{n-1}.
+        Liste des coefficients de P'(x), de a'_0 à a'_{n-1}.
     """
     if len(coefficients) < 2:
         return [0.0]
 
-    # np.polyder attend les coefficients du plus haut degr au plus bas.
     poly_obj = np.poly1d(coefficients[::-1])
     derivative_poly_obj = np.polyder(poly_obj)
     
-    # On retourne les coefficients dans l'ordre a'_0, a'_1, ...
     return list(derivative_poly_obj.coeffs)[::-1]
 
 def find_real_roots(coefficients: List[float]) -> List[float]:
     """
-    Trouve les racines relles d'un polynme.
+    Trouve les racines réelles d'un polynôme.
 
     Args:
-        coefficients: Liste des coefficients du polynme, de a_0   a_n.
+        coefficients: Liste des coefficients du polynôme, de a_0 à a_n.
 
     Returns:
-        Liste des racines relles.
+        Liste des racines réelles.
     """
     if not coefficients or all(c == 0 for c in coefficients):
         return []
         
-    # np.roots attend les coefficients du plus haut degr au plus bas.
     roots = np.roots(coefficients[::-1])
-    
-    # On ne garde que les racines relles.
     return [r.real for r in roots if np.isreal(r)]
-
-# --- Algorithme principal ---
 
 def estimate_integral_monte_carlo(
     a: float, 
@@ -73,35 +65,30 @@ def estimate_integral_monte_carlo(
     n_points: int
 ) -> float:
     """
-    Estime l'intgrale de P(x) sur [a,b] avec la mthode de Monte Carlo.
+    Estime l'intégrale de P(x) sur [a,b] avec la méthode de Monte Carlo.
 
     Args:
         a, b: Bornes de l'intervalle.
-        poly_coeffs: Coefficients du polynme, de a_0   a_n.
+        poly_coeffs: Coefficients du polynôme, de a_0 à a_n.
         n_points: Nombre de points pour le tirage.
 
     Returns:
-        Valeur estime de l'intgrale.
+        Valeur estimée de l'intégrale.
     """
     if n_points <= 0:
-        raise ValueError("Le nombre de points (n_points) doit tre positif.")
+        raise ValueError("Le nombre de points (n_points) doit être positif.")
 
-    # 1. Dterminer le rectangle englobant
-    
-    # a. Trouver les points o la drive s'annule
+    # 1. Déterminer le rectangle englobant
     derivative_coeffs = calculate_derivative_coeffs(poly_coeffs)
     derivative_roots = find_real_roots(derivative_coeffs)
 
-    # b. Identifier les points critiques pour les extrema sur [a,b]
     critical_points = {a, b}
     for root in derivative_roots:
         if a <= root <= b:
             critical_points.add(root)
 
-    # c. valuer le polynme aux points critiques
     extreme_values = [evaluate_polynomial(poly_coeffs, p) for p in critical_points]
 
-    # d. Dterminer les bornes verticales du rectangle
     y_min_f = min(extreme_values)
     y_max_f = max(extreme_values)
     y_min_rect = min(0, y_min_f)
@@ -112,70 +99,132 @@ def estimate_integral_monte_carlo(
         return 0.0
 
     # 2. Tirage de Monte Carlo
-    
     contributions_sum = 0
     for _ in range(n_points):
-        # Tirage alatoire uniforme dans le rectangle
         rand_x = random.uniform(a, b)
         rand_y = random.uniform(y_min_rect, y_max_rect)
-
         f_value = evaluate_polynomial(poly_coeffs, rand_x)
 
-        # Calcul de la contribution du point
         if 0 <= rand_y <= f_value:
             contributions_sum += 1
         elif f_value <= rand_y < 0:
             contributions_sum -= 1
             
     # 3. Calcul final
-    
     estimated_integral = (contributions_sum / n_points) * rect_area
     return estimated_integral
 
-# --- Section d'exemple ---
+# --- Fonctions pour l'interaction utilisateur ---
+
+def get_polynomial_from_user() -> List[float]:
+    """Demande à l'utilisateur de saisir les coefficients du polynôme."""
+    while True:
+        try:
+            degree_str = input("Entrez le degré du polynôme (entier >= 0): ")
+            degree = int(degree_str)
+            if degree < 0:
+                raise ValueError("Le degré ne peut pas être négatif.")
+            break
+        except ValueError as e:
+            print(f"Erreur: l'entrée doit être un entier positif. {e}")
+
+    coeffs = []
+    for i in range(degree + 1):
+        while True:
+            try:
+                c_str = input(f"  - Entrez le coefficient a_{i} (pour x^{i}): ")
+                coeffs.append(float(c_str))
+                break
+            except ValueError:
+                print("Erreur: le coefficient doit être un nombre.")
+    return coeffs
+
+def get_interval_from_user() -> Tuple[float, float]:
+    """Demande à l'utilisateur de saisir l'intervalle d'intégration."""
+    while True:
+        try:
+            a_str = input("Entrez la borne inférieure de l'intervalle (a): ")
+            a = float(a_str)
+            b_str = input("Entrez la borne supérieure de l'intervalle (b): ")
+            b = float(b_str)
+            if b <= a:
+                raise ValueError("La borne supérieure (b) doit être > à la borne inférieure (a).")
+            return a, b
+        except ValueError as e:
+            print(f"Erreur: les bornes doivent être des nombres. {e}")
+
+def get_n_points_from_user() -> int:
+    """Demande à l'utilisateur le nombre de points pour l'estimation."""
+    while True:
+        try:
+            n_str = input("Entrez le nombre de points pour l'estimation (entier > 0): ")
+            n_points = int(n_str)
+            if n_points <= 0:
+                raise ValueError("Le nombre de points doit être un entier strictement positif.")
+            return n_points
+        except ValueError as e:
+            print(f"Erreur: l'entrée doit être un entier positif. {e}")
+
+def build_poly_string(coeffs: List[float]) -> str:
+    """Construit une représentation textuelle du polynôme."""
+    if not coeffs:
+        return "0"
+    parts = []
+    for i, c in reversed(list(enumerate(coeffs))):
+        if abs(c) < 1e-9:  # Ignorer les coefficients nuls
+            continue
+        
+        # Signe
+        sign = "-" if c < 0 else "+"
+        c = abs(c)
+
+        # Coefficient
+        coeff_str = f"{c:.2f}" # Changed from {c:2f} to {c:.2f}
+        
+        # Terme en x
+        if i == 0:
+            term = coeff_str
+        elif i == 1:
+            term = f"{coeff_str}x" if c != 1.0 else "x"
+        else:
+            term = f"{coeff_str}x^{i}" if c != 1.0 else f"x^{i}"
+        
+        parts.append(f" {sign} {term}")
+
+    poly_str = "".join(parts).lstrip(" +")
+    return poly_str if poly_str else "0"
+
+# --- Section principale ---
 
 if __name__ == '__main__':
-    # Exemple d'utilisation avec le polynme f(x) = x^2 - 4
-    # Intgrale de 0   3.
-    # L'intgrale exacte est [x^3/3 - 4x] de 0   3 = (27/3 - 12) - 0 = 9 - 12 = -3.
-    
-    # Coefficients pour x^2 - 4: a0=-4, a1=0, a2=1
-    coeffs = [-4.0, 0.0, 1.0] 
-    interval_a = 0.0
-    interval_b = 3.0
-    num_points = 100000  # Plus le nombre est grand, plus la prcision augmente
+    print("="*50)
+    print("Calcul d'intégrale par la méthode de Monte Carlo")
+    print("="*50)
 
-    print(f"Polynme: P(x) = x^2 - 4")
-    print(f"Intervalle d'intgration: [{interval_a}, {interval_b}]")
-    print(f"Nombre de points pour l'estimation: {num_points}")
-    
-    # Appel de la fonction principale
-    estimated_value = estimate_integral_monte_carlo(
-        a=interval_a,
-        b=interval_b,
-        poly_coeffs=coeffs,
-        n_points=num_points
-    )
-    
-    print(f"\nValeur exacte de l'intgrale: -3.0")
-    print(f"Valeur estime par Monte Carlo: {estimated_value:.4f}")
+    try:
+        poly_coeffs = get_polynomial_from_user()
+        interval_a, interval_b = get_interval_from_user()
+        num_points = get_n_points_from_user()
 
-    # Deuxime exemple: f(x) = -x + 5 sur [0, 5]
-    # L'intgrale exacte est [-x^2/2 + 5x] de 0   5 = (-25/2 + 25) = 12.5
-    coeffs_2 = [5.0, -1.0]
-    interval_a_2 = 0.0
-    interval_b_2 = 5.0
-    
-    print("\n" + "="*30)
-    print(f"\nPolynme: P(x) = -x + 5")
-    print(f"Intervalle d'intgration: [{interval_a_2}, {interval_b_2}]")
-    
-    estimated_value_2 = estimate_integral_monte_carlo(
-        a=interval_a_2,
-        b=interval_b_2,
-        poly_coeffs=coeffs_2,
-        n_points=num_points
-    )
-    
-    print(f"\nValeur exacte de l'intgrale: 12.5")
-    print(f"Valeur estime par Monte Carlo: {estimated_value_2:.4f}")
+        print("\n--- Récapitulatif ---")
+        print(f"Polynôme P(x) = {build_poly_string(poly_coeffs)}")
+        print(f"Intervalle d'intégration: [{interval_a}, {interval_b}]")
+        print(f"Nombre de points pour l'estimation: {num_points:,}")
+        
+        # Appel de la fonction principale
+        estimated_value = estimate_integral_monte_carlo(
+            a=interval_a,
+            b=interval_b,
+            poly_coeffs=poly_coeffs,
+            n_points=num_points
+        )
+        
+        print("\n--- Résultat ---")
+        print(f"Valeur estimée de l'intégrale: {estimated_value:.6f}")
+
+    except ValueError as e:
+        print(f"\nErreur de saisie: {e}")
+    except KeyboardInterrupt:
+        print("\n\nProgramme interrompu par l'utilisateur.")
+    except Exception as e:
+        print(f"\nUne erreur inattendue est survenue: {e}")
