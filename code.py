@@ -64,7 +64,7 @@ def estimate_integral_monte_carlo(
     b: float, 
     poly_coeffs: List[float], 
     n_points: int
-) -> float:
+) -> Tuple[float, List[Tuple[float, float]], List[Tuple[float, float]], List[Tuple[float, float]], float, float]:
     """
     Estime l'intégrale de P(x) sur [a,b] avec la méthode de Monte Carlo.
 
@@ -74,7 +74,13 @@ def estimate_integral_monte_carlo(
         n_points: Nombre de points pour le tirage.
 
     Returns:
-        Valeur estimée de l'intégrale.
+        Un tuple contenant:
+        - La valeur estimée de l'intégrale.
+        - Les points sous la courbe positive.
+        - Les points sur la courbe négative.
+        - Les points en dehors de la courbe.
+        - L'ordonnée minimale du rectangle (y_min_rect).
+        - L'ordonnée maximale du rectangle (y_max_rect).
     """
     if n_points <= 0:
         raise ValueError("Le nombre de points (n_points) doit être positif.")
@@ -97,10 +103,14 @@ def estimate_integral_monte_carlo(
 
     rect_area = (b - a) * (y_max_rect - y_min_rect)
     if rect_area == 0:
-        return 0.0
+        return 0.0, [], [], [], y_min_rect, y_max_rect
 
     # 2. Tirage de Monte Carlo
     contributions_sum = 0
+    points_pos = []
+    points_neg = []
+    points_outside = []
+
     for _ in range(n_points):
         rand_x = random.uniform(a, b)
         rand_y = random.uniform(y_min_rect, y_max_rect)
@@ -108,12 +118,16 @@ def estimate_integral_monte_carlo(
 
         if 0 <= rand_y <= f_value:
             contributions_sum += 1
+            points_pos.append((rand_x, rand_y))
         elif f_value <= rand_y < 0:
             contributions_sum -= 1
+            points_neg.append((rand_x, rand_y))
+        else:
+            points_outside.append((rand_x, rand_y))
             
     # 3. Calcul final
     estimated_integral = (contributions_sum / n_points) * rect_area
-    return estimated_integral
+    return estimated_integral, points_pos, points_neg, points_outside, y_min_rect, y_max_rect
 
 # --- Fonctions pour l'interaction utilisateur ---
 
@@ -199,7 +213,12 @@ def plot_integral_and_points(
     a: float, 
     b: float, 
     poly_coeffs: List[float], 
-    estimated_value: float
+    estimated_value: float,
+    points_pos: List[Tuple[float, float]],
+    points_neg: List[Tuple[float, float]],
+    points_outside: List[Tuple[float, float]],
+    y_min_rect: float,
+    y_max_rect: float
 ):
     """
     Affiche le graphique de la fonction, l'aire d'intégration et les points de Monte Carlo.
@@ -207,31 +226,55 @@ def plot_integral_and_points(
     Args:
         a, b: Bornes de l'intervalle.
         poly_coeffs: Coefficients du polynôme.
-        n_points: Nombre de points utilisés pour l'estimation.
         estimated_value: Valeur estimée de l'intégrale.
+        points_pos: Points sous la courbe positive.
+        points_neg: Points sur la courbe négative.
+        points_outside: Points en dehors de la courbe.
+        y_min_rect: Ordonnée minimale du rectangle.
+        y_max_rect: Ordonnée maximale du rectangle.
     """
-    
+    n_points = len(points_pos) + len(points_neg) + len(points_outside)
     x_curve = np.linspace(a, b, 400)
     y_curve = evaluate_polynomial(poly_coeffs, x_curve)
 
-    plt.figure(figsize=(10, 6))
-    
+    plt.figure(figsize=(12, 8))
+
+    # Points de Monte Carlo
+    if n_points > 0:
+        # Unpack and plot points
+        if points_outside:
+            x_out, y_out = zip(*points_outside)
+            plt.scatter(x_out, y_out, color='gray', s=1, label=f'Points extérieurs ({len(points_outside)})')
+        if points_pos:
+            x_pos, y_pos = zip(*points_pos)
+            plt.scatter(x_pos, y_pos, color='green', s=1, label=f'Points positifs ({len(points_pos)})')
+        if points_neg:
+            x_neg, y_neg = zip(*points_neg)
+            plt.scatter(x_neg, y_neg, color='red', s=1, label=f'Points négatifs ({len(points_neg)})')
+
     # Courbe de la fonction
-    plt.plot(x_curve, y_curve, 'r-', linewidth=2, label=f"P(x) = {build_poly_string(poly_coeffs)}")
+    plt.plot(x_curve, y_curve, 'b-', linewidth=2, label=f"P(x) = {build_poly_string(poly_coeffs)}")
     
     # Aire d'intégration
-    plt.fill_between(x_curve, 0, y_curve, where=y_curve>=0, facecolor='green', alpha=0.3, label="Aire positive")
-    plt.fill_between(x_curve, 0, y_curve, where=y_curve<=0, facecolor='red', alpha=0.3, label="Aire négative")
+    plt.fill_between(x_curve, 0, y_curve, where=y_curve>=0, facecolor='cyan', alpha=0.5, label="Aire positive")
+    plt.fill_between(x_curve, 0, y_curve, where=y_curve<=0, facecolor='magenta', alpha=0.5, label="Aire négative")
     
+    # Rectangle englobant
+    rect = plt.Rectangle((a, y_min_rect), b - a, y_max_rect - y_min_rect,
+                         edgecolor='orange', facecolor='none', linestyle='--', linewidth=2,
+                         label='Rectangle englobant')
+    plt.gca().add_patch(rect)
+
     # Ligne de l'axe x
     plt.axhline(0, color='black', linewidth=0.8)
 
     # Configuration du graphique
-    plt.title(f"Intégration de P(x) sur [{a}, {b}]\nValeur estimée ≈ {estimated_value:.4f}")
+    plt.title(f"Intégration de P(x) sur [{a}, {b}] avec {n_points} points\nValeur estimée ≈ {estimated_value:.4f}")
     plt.xlabel("x")
     plt.ylabel("P(x)")
     plt.grid(True)
-    plt.legend()
+    plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
     plt.show()
 
 # --- Section principale ---
@@ -252,7 +295,7 @@ if __name__ == '__main__':
         print(f"Nombre de points pour l'estimation: {num_points:,}")
         
         # Appel de la fonction principale
-        estimated_value = estimate_integral_monte_carlo(
+        estimated_value, points_pos, points_neg, points_outside, y_min_rect, y_max_rect = estimate_integral_monte_carlo(
             a=interval_a,
             b=interval_b,
             poly_coeffs=poly_coeffs,
@@ -274,7 +317,12 @@ if __name__ == '__main__':
                 a=interval_a,
                 b=interval_b,
                 poly_coeffs=poly_coeffs,
-                estimated_value=estimated_value
+                estimated_value=estimated_value,
+                points_pos=points_pos,
+                points_neg=points_neg,
+                points_outside=points_outside,
+                y_min_rect=y_min_rect,
+                y_max_rect=y_max_rect
             )
 
     except ValueError as e:
