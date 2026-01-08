@@ -6,6 +6,7 @@ pour des fonctions polynomiales.
 
 import random
 import numpy as np
+import matplotlib.pyplot as plt
 from typing import List, Tuple
 
 # --- Fonctions de l'algorithme ---
@@ -194,6 +195,45 @@ def build_poly_string(coeffs: List[float]) -> str:
     poly_str = "".join(parts).lstrip(" +")
     return poly_str if poly_str else "0"
 
+def plot_integral_and_points(
+    a: float, 
+    b: float, 
+    poly_coeffs: List[float], 
+    estimated_value: float
+):
+    """
+    Affiche le graphique de la fonction, l'aire d'intégration et les points de Monte Carlo.
+
+    Args:
+        a, b: Bornes de l'intervalle.
+        poly_coeffs: Coefficients du polynôme.
+        n_points: Nombre de points utilisés pour l'estimation.
+        estimated_value: Valeur estimée de l'intégrale.
+    """
+    
+    x_curve = np.linspace(a, b, 400)
+    y_curve = evaluate_polynomial(poly_coeffs, x_curve)
+
+    plt.figure(figsize=(10, 6))
+    
+    # Courbe de la fonction
+    plt.plot(x_curve, y_curve, 'r-', linewidth=2, label=f"P(x) = {build_poly_string(poly_coeffs)}")
+    
+    # Aire d'intégration
+    plt.fill_between(x_curve, 0, y_curve, where=y_curve>=0, facecolor='green', alpha=0.3, label="Aire positive")
+    plt.fill_between(x_curve, 0, y_curve, where=y_curve<=0, facecolor='red', alpha=0.3, label="Aire négative")
+    
+    # Ligne de l'axe x
+    plt.axhline(0, color='black', linewidth=0.8)
+
+    # Configuration du graphique
+    plt.title(f"Intégration de P(x) sur [{a}, {b}]\nValeur estimée ≈ {estimated_value:.4f}")
+    plt.xlabel("x")
+    plt.ylabel("P(x)")
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+
 # --- Section principale ---
 
 if __name__ == '__main__':
@@ -221,6 +261,21 @@ if __name__ == '__main__':
         
         print("\n--- Résultat ---")
         print(f"Valeur estimée de l'intégrale: {estimated_value:.6f}")
+
+        while True:
+            show_plot = input("Voulez-vous afficher le graphique de la fonction et de l'aire d'intégration ? (o/n) : ").lower()
+            if show_plot in ['o', 'n']:
+                break
+            else:
+                print("Veuillez répondre par 'o' pour oui ou 'n' pour non.")
+
+        if show_plot == 'o':
+            plot_integral_and_points(
+                a=interval_a,
+                b=interval_b,
+                poly_coeffs=poly_coeffs,
+                estimated_value=estimated_value
+            )
 
     except ValueError as e:
         print(f"\nErreur de saisie: {e}")
